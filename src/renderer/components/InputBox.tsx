@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import icon from '../static/icon.png'
+import pwIcon from '../static/playwright-logo.svg'
 import { trackingEvent } from '@/packages/event'
 import MiniButton from './MiniButton'
 import _ from 'lodash'
@@ -26,12 +27,69 @@ export default function InputBox(props: Props) {
     const { t } = useTranslation()
     const [messageInput, setMessageInput] = useState('')
     const inputRef = useRef<HTMLTextAreaElement | null>(null)
+    const [isPwActive, setIsPwVisible] = useState(false);
 
-    const handleSubmit = (needGenerating = true) => {
+    const url = "http://localhost:5005/"
+    const uri = "parse"
+    const pwHandle = async () => {
+        if(isPwActive) {
+            setIsPwVisible(false)
+        }
+    
+        // 'on' case
+        const response = await fetch(url);
+        if (response.status !== 404) {
+            setIsPwVisible(false)
+            alert('pw api is not started')
+        }
+        setIsPwVisible(!isPwActive)
+    }
+
+    const getFirstUrl = (messageInput: string) => {
+        let inputUrls: RegExpMatchArray | null = find_urls(messageInput)
+        let firstUrl: string
+
+        if(inputUrls === null) {
+            return false
+        } 
+
+        firstUrl = inputUrls[0].slice(1)
+        return firstUrl
+    }
+
+    const find_urls = (messageInput: string) => {
+        const regex = /!https?:\/\/[^\s]+/g;
+        const matches = messageInput.match(regex);
+        return matches
+    }
+
+    const pwParseRequest = async(messageInput: string, parseUrl: string) => {
+        const response = await fetch(url + uri + '?url=' + parseUrl);
+        const json = await response.json();  
+        return json
+    }
+
+    const formMessage = (response: any, message: string) => {
+        const descriptionMessege = "СИСТЕМНОЕ СООБЩЕНИЕ: в процессе парсинга сайта получены такие данные со страницы:"
+        const resultMrssage = message + '\n' + descriptionMessege + '\n' + response['markdown'] + JSON.stringify(response['links'])
+        return resultMrssage
+    }
+
+    const handleSubmit = async(needGenerating = true) => {
         if (messageInput.trim() === '') {
             return
         }
-        const newMessage = createMessage('user', messageInput)
+
+        let message: string = messageInput
+        if(isPwActive) {
+            let url = getFirstUrl(message)
+            if(url) {
+                let response = await pwParseRequest(messageInput, url!)
+                message = formMessage(response, message)
+            }
+        }
+        
+        const newMessage = createMessage('user', message)
         sessionActions.submitNewUserMessage({
             currentSessionId: props.currentSessionId,
             newUserMsg: newMessage,
@@ -81,6 +139,9 @@ export default function InputBox(props: Props) {
             <div className={cn('w-full mx-auto flex flex-col')}>
                 <div className='flex flex-row flex-nowrap justify-between py-1'>
                     <div className='flex flex-row items-center'>
+                        <div onClick={ () => pwHandle()} style={{ backgroundColor: isPwActive ? 'rgba(0,255,0,0.3)' : 'rgba(255,0,0,0.5)', borderRadius: '20%', cursor: 'pointer',  width: '25px', height: '25px' }}>
+                            <img src={pwIcon} style={{ width: '25px', height: '25px'}} />
+                        </div>
                         <MiniButton className='mr-2 hover:bg-transparent' style={{ color: theme.palette.text.primary }}
                             onClick={() => {
                                 setEasterEgg(true)
